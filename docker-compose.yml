@@ -1,0 +1,46 @@
+# MiniFTP + CloudPub — развёртывание на ASUSTOR AS1104T (ARM64)
+# Запуск:  docker compose up -d --build
+name: miniftp
+
+services:
+  python-ftp-server:
+    build: ./server
+    image: miniftp-server:1.0
+    container_name: python-ftp-server
+    restart: unless-stopped
+    # UID:GID владельца папки ./data на NAS (узнать: `id <ваш_логин>` по SSH)
+    user: "${PUID:-1000}:${PGID:-1000}"
+    environment:
+      - MFTP_PORT=2121
+      - MFTP_MAX_CLIENTS=32
+      - MFTP_IDLE_TIMEOUT=300
+      - MFTP_LOG_LEVEL=INFO
+      # Первый запуск: создаётся пользователь и файл ключа в ./data/config/keys/
+      - MFTP_BOOTSTRAP_USER=${MFTP_BOOTSTRAP_USER:-}
+      - MFTP_BOOTSTRAP_PASSWORD=${MFTP_BOOTSTRAP_PASSWORD:-}
+    volumes:
+      - ./data:/data
+    # Доступ из локальной сети напрямую (без туннеля). Уберите, если не нужен.
+    ports:
+      - "2121:2121"
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+  cloudpub:
+    image: cloudpub/cloudpub:latest-arm64
+    container_name: cloudpub
+    restart: unless-stopped
+    environment:
+      - TOKEN=${CLOUDPUB_TOKEN:?set CLOUDPUB_TOKEN in .env}
+      # протокол=сервис:порт — имя сервиса резолвится внутренним DNS сети compose
+      - TCP=python-ftp-server:2121
+    command: run
+    depends_on:
+      python-ftp-server:
+        condition: service_healthy
+    volumes:
+      - cloudpub-config:/home/cloudpub
+
+volumes:
+  cloudpub-config:

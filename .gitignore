@@ -1,0 +1,7 @@
+.env
+data/
+**/bin/
+**/obj/
+__pycache__/
+*.auth_token.key
+.auth_token.key
